@@ -1,6 +1,8 @@
 # Script de build automatique pour GR Mods
 # Ce script compile l'application, copie les assets et crée l'installeur
 
+$startTime = Get-Date
+
 Write-Host "================================================" -ForegroundColor Cyan
 Write-Host "       GR Mods - Build Automatique" -ForegroundColor Cyan
 Write-Host "================================================" -ForegroundColor Cyan
@@ -27,11 +29,8 @@ if (-not (Test-Path $innoSetupCompiler)) {
 
 # Étape 1: Nettoyer les anciens builds
 Write-Host "[1/6] Nettoyage des anciens builds..." -ForegroundColor Yellow
-if (Test-Path "$projectRoot\GTA5Launcher\bin") {
-    Remove-Item "$projectRoot\GTA5Launcher\bin" -Recurse -Force -ErrorAction SilentlyContinue
-}
-if (Test-Path "$projectRoot\GTA5Launcher\obj") {
-    Remove-Item "$projectRoot\GTA5Launcher\obj" -Recurse -Force -ErrorAction SilentlyContinue
+if (Test-Path "$projectRoot\GTA5Launcher\bin\Release") {
+    Remove-Item "$projectRoot\GTA5Launcher\bin\Release" -Recurse -Force -ErrorAction SilentlyContinue
 }
 if (Test-Path "$projectRoot\Installer") {
     Remove-Item "$projectRoot\Installer" -Recurse -Force -ErrorAction SilentlyContinue
@@ -42,7 +41,7 @@ Write-Host ""
 # Étape 2: Compiler l'application
 Write-Host "[2/6] Compilation de l'application..." -ForegroundColor Yellow
 Set-Location $projectRoot
-$buildResult = dotnet publish $projectFile -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true 2>&1
+$buildResult = dotnet publish $projectFile -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true --nologo --verbosity quiet 2>&1
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "ERREUR: La compilation a échoué!" -ForegroundColor Red
@@ -88,9 +87,18 @@ if (Test-Path $finalExe) {
 # Copier le nouveau exe
 Copy-Item -Path $installerOutput -Destination $finalExe -Force
 Write-Host "   Installeur copié vers: $finalExe" -ForegroundColor Green
+
+# Nettoyer le dossier Installer (plus besoin après la copie)
+if (Test-Path "$projectRoot\Installer") {
+    Remove-Item "$projectRoot\Installer" -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Host "   Dossier temporaire Installer supprimé" -ForegroundColor Gray
+}
 Write-Host ""
 
 # Étape 6: Informations finales
+$endTime = Get-Date
+$duration = ($endTime - $startTime).TotalSeconds
+
 Write-Host "[6/6] Build terminé!" -ForegroundColor Green
 Write-Host ""
 Write-Host "================================================" -ForegroundColor Cyan
@@ -103,6 +111,7 @@ Write-Host ""
 
 $exeSize = (Get-Item $finalExe).Length / 1MB
 Write-Host "Taille: $([math]::Round($exeSize, 2)) MB" -ForegroundColor Gray
+Write-Host "Durée: $([math]::Round($duration, 1)) secondes" -ForegroundColor Gray
 Write-Host ""
 Write-Host "L'installeur est prêt à être distribué!" -ForegroundColor Green
 Write-Host ""
