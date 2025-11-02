@@ -55,8 +55,13 @@ namespace GTA5Launcher
                         var steamPath = key.GetValue("SteamPath") as string;
                         if (!string.IsNullOrEmpty(steamPath))
                         {
+                            // Normalize path (convert forward slashes to backslashes)
+                            steamPath = steamPath.Replace("/", "\\");
                             var gtaPath = Path.Combine(steamPath, "steamapps", "common", "Grand Theft Auto V Enhanced");
-                            if (!paths.Contains(gtaPath))
+                            
+                            // Normalize and check if path not already in list (case-insensitive)
+                            gtaPath = Path.GetFullPath(gtaPath);
+                            if (!paths.Any(p => Path.GetFullPath(p).Equals(gtaPath, StringComparison.OrdinalIgnoreCase)))
                                 paths.Insert(0, gtaPath);
                         }
                     }
@@ -64,7 +69,11 @@ namespace GTA5Launcher
             }
             catch { }
 
-            return paths;
+            // Remove duplicates and return distinct paths (normalize all paths)
+            return paths
+                .Select(p => Path.GetFullPath(p))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
         }
 
         private readonly string[] rockstarPaths = new[]
@@ -86,19 +95,27 @@ namespace GTA5Launcher
         public List<PlatformInfo> DetectAllInstallations()
         {
             var installations = new List<PlatformInfo>();
+            var foundPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             // Check Steam (using dynamic detection)
             foreach (var path in GetSteamLibraryPaths())
             {
                 if (IsValidGTAInstallation(path))
                 {
-                    installations.Add(new PlatformInfo
+                    // Normalize path to avoid duplicates
+                    var normalizedPath = Path.GetFullPath(path);
+                    
+                    if (!foundPaths.Contains(normalizedPath))
                     {
-                        Type = PlatformType.Steam,
-                        Name = "Steam",
-                        Path = path,
-                        SizeInBytes = GetDirectorySize(path)
-                    });
+                        installations.Add(new PlatformInfo
+                        {
+                            Type = PlatformType.Steam,
+                            Name = "Steam",
+                            Path = normalizedPath,
+                            SizeInBytes = GetDirectorySize(path)
+                        });
+                        foundPaths.Add(normalizedPath);
+                    }
                 }
             }
 
@@ -107,13 +124,20 @@ namespace GTA5Launcher
             {
                 if (IsValidGTAInstallation(path))
                 {
-                    installations.Add(new PlatformInfo
+                    // Normalize path to avoid duplicates
+                    var normalizedPath = Path.GetFullPath(path);
+                    
+                    if (!foundPaths.Contains(normalizedPath))
                     {
-                        Type = PlatformType.Rockstar,
-                        Name = "Rockstar Games",
-                        Path = path,
-                        SizeInBytes = GetDirectorySize(path)
-                    });
+                        installations.Add(new PlatformInfo
+                        {
+                            Type = PlatformType.Rockstar,
+                            Name = "Rockstar Games",
+                            Path = normalizedPath,
+                            SizeInBytes = GetDirectorySize(path)
+                        });
+                        foundPaths.Add(normalizedPath);
+                    }
                 }
             }
 
@@ -122,13 +146,20 @@ namespace GTA5Launcher
             {
                 if (IsValidGTAInstallation(path))
                 {
-                    installations.Add(new PlatformInfo
+                    // Normalize path to avoid duplicates
+                    var normalizedPath = Path.GetFullPath(path);
+                    
+                    if (!foundPaths.Contains(normalizedPath))
                     {
-                        Type = PlatformType.Epic,
-                        Name = "Epic Games",
-                        Path = path,
-                        SizeInBytes = GetDirectorySize(path)
-                    });
+                        installations.Add(new PlatformInfo
+                        {
+                            Type = PlatformType.Epic,
+                            Name = "Epic Games",
+                            Path = normalizedPath,
+                            SizeInBytes = GetDirectorySize(path)
+                        });
+                        foundPaths.Add(normalizedPath);
+                    }
                 }
             }
 
