@@ -1,7 +1,7 @@
 <Window x:Class="GTA5Launcher.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="GTA V Enhanced Launcher" 
+        Title="GR Mods" 
         Height="600" 
         Width="900"
         Background="#1E1E1E"
@@ -18,7 +18,7 @@
 
         <!-- Title -->
         <TextBlock Grid.Row="0" 
-                   Text="GTA V Enhanced Launcher" 
+                   Text="GR Mods" 
                    FontSize="32" 
                    FontWeight="Bold" 
                    Foreground="#0078D4" 
