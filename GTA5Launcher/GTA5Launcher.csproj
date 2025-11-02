@@ -5,7 +5,6 @@
     <TargetFramework>net6.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <ApplicationIcon>icon.ico</ApplicationIcon>
     <AssemblyName>GTA5Launcher</AssemblyName>
     <RootNamespace>GTA5Launcher</RootNamespace>
   </PropertyGroup>
