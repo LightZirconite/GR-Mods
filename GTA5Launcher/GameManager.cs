@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Collections.Generic;
 
 namespace GTA5Launcher
 {
@@ -45,19 +46,21 @@ namespace GTA5Launcher
             @"D:\Epic Games\GTAV"
         };
 
-        public PlatformInfo DetectCurrentInstallation()
+        public List<PlatformInfo> DetectAllInstallations()
         {
+            var installations = new List<PlatformInfo>();
+
             // Check Steam
             foreach (var path in steamPaths)
             {
                 if (IsValidGTAInstallation(path))
                 {
-                    return new PlatformInfo
+                    installations.Add(new PlatformInfo
                     {
                         Type = PlatformType.Steam,
                         Name = "Steam",
                         Path = path
-                    };
+                    });
                 }
             }
 
@@ -66,12 +69,12 @@ namespace GTA5Launcher
             {
                 if (IsValidGTAInstallation(path))
                 {
-                    return new PlatformInfo
+                    installations.Add(new PlatformInfo
                     {
                         Type = PlatformType.Rockstar,
                         Name = "Rockstar Games",
                         Path = path
-                    };
+                    });
                 }
             }
 
@@ -80,16 +83,22 @@ namespace GTA5Launcher
             {
                 if (IsValidGTAInstallation(path))
                 {
-                    return new PlatformInfo
+                    installations.Add(new PlatformInfo
                     {
                         Type = PlatformType.Epic,
                         Name = "Epic Games",
                         Path = path
-                    };
+                    });
                 }
             }
 
-            return null;
+            return installations;
+        }
+
+        public PlatformInfo DetectCurrentInstallation()
+        {
+            var installations = DetectAllInstallations();
+            return installations.FirstOrDefault();
         }
 
         private bool IsValidGTAInstallation(string path)

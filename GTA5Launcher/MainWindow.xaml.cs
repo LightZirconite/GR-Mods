@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Threading.Tasks;
@@ -26,12 +27,38 @@ namespace GTA5Launcher
         {
             StatusText.Text = "Recherche de GTA V...";
             
-            var currentPlatform = await Task.Run(() => gameManager.DetectCurrentInstallation());
+            var allInstallations = await Task.Run(() => gameManager.DetectAllInstallations());
             
-            if (currentPlatform != null)
+            if (allInstallations.Count > 0)
             {
-                CurrentLocationText.Text = $"Plateforme : {currentPlatform.Name}\nChemin : {currentPlatform.Path}";
-                StatusText.Text = $"GTA V trouvé sur {currentPlatform.Name}";
+                var currentPlatform = allInstallations[0];
+                
+                if (allInstallations.Count > 1)
+                {
+                    // Multiple installations found
+                    var platforms = string.Join(", ", allInstallations.Select(p => p.Name));
+                    CurrentLocationText.Text = $"⚠️ ATTENTION : {allInstallations.Count} installations détectées !\n" +
+                                              $"Plateformes : {platforms}\n\n" +
+                                              $"Installation principale : {currentPlatform.Name}\n" +
+                                              $"Chemin : {currentPlatform.Path}\n\n" +
+                                              $"Il est recommandé de n'avoir qu'une seule installation.\n" +
+                                              $"Supprimez les copies inutiles avant d'utiliser ce launcher.";
+                    StatusText.Text = $"⚠️ {allInstallations.Count} installations trouvées - Nettoyage recommandé";
+                    
+                    MessageBox.Show(
+                        $"Plusieurs installations de GTA V ont été détectées :\n\n" +
+                        string.Join("\n", allInstallations.Select(p => $"• {p.Name} : {p.Path}")) +
+                        $"\n\nPour éviter les problèmes, il est recommandé de n'avoir qu'une seule installation.\n" +
+                        $"Supprimez manuellement les copies inutiles avant d'utiliser ce launcher.",
+                        "Plusieurs installations détectées",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                }
+                else
+                {
+                    CurrentLocationText.Text = $"Plateforme : {currentPlatform.Name}\nChemin : {currentPlatform.Path}";
+                    StatusText.Text = $"GTA V trouvé sur {currentPlatform.Name}";
+                }
                 
                 // Disable current platform button
                 DisableCurrentPlatformButton(currentPlatform.Type);

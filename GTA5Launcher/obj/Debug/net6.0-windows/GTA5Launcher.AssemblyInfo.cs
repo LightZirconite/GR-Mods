@@ -10,12 +10,12 @@
 using System;
 using System.Reflection;
 
-[assembly: System.Reflection.AssemblyCompanyAttribute("GTA5Launcher")]
+[assembly: System.Reflection.AssemblyCompanyAttribute("GR-Mods")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e09af6acb5b8701c55e1e57c59c1ef3ae64394a8")]
-[assembly: System.Reflection.AssemblyProductAttribute("GTA5Launcher")]
-[assembly: System.Reflection.AssemblyTitleAttribute("GTA5Launcher")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+c182e5fa014034527b1fcab3fe42f24b9a33afc5")]
+[assembly: System.Reflection.AssemblyProductAttribute("GR-Mods")]
+[assembly: System.Reflection.AssemblyTitleAttribute("GR-Mods")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
 [assembly: System.Runtime.Versioning.TargetPlatformAttribute("Windows7.0")]
 [assembly: System.Runtime.Versioning.SupportedOSPlatformAttribute("Windows7.0")]
