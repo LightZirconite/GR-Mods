@@ -109,8 +109,8 @@ namespace GTA5Launcher
                 }
                 else
                 {
-                    CurrentLocationText.Text = $"✓ Plateforme : {currentPlatform.Name}\n📂 Chemin : {currentPlatform.Path}";
-                    StatusText.Text = $"✓ GTA V trouvé sur {currentPlatform.Name}";
+                    CurrentLocationText.Text = $"✓ Plateforme : {currentPlatform.Name}\n📂 Chemin : {currentPlatform.Path}\n💾 Taille : {currentPlatform.GetSizeFormatted()}";
+                    StatusText.Text = $"✓ GTA V trouvé sur {currentPlatform.Name} ({currentPlatform.GetSizeFormatted()})";
                 }
                 
                 // Show active badge and disable current platform button

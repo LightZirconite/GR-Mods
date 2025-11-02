@@ -20,6 +20,13 @@ namespace GTA5Launcher
         public PlatformType Type { get; set; }
         public string Name { get; set; }
         public string Path { get; set; }
+        public long SizeInBytes { get; set; }
+        
+        public string GetSizeFormatted()
+        {
+            double sizeInGB = SizeInBytes / (1024.0 * 1024.0 * 1024.0);
+            return $"{sizeInGB:F2} GB";
+        }
     }
 
     public class GameManager
@@ -31,9 +38,9 @@ namespace GTA5Launcher
         {
             var paths = new List<string>
             {
-                @"C:\Program Files (x86)\Steam\steamapps\common\Grand Theft Auto V",
-                @"D:\SteamLibrary\steamapps\common\Grand Theft Auto V",
-                @"E:\SteamLibrary\steamapps\common\Grand Theft Auto V"
+                @"C:\Program Files (x86)\Steam\steamapps\common\Grand Theft Auto V Enhanced",
+                @"D:\SteamLibrary\steamapps\common\Grand Theft Auto V Enhanced",
+                @"E:\SteamLibrary\steamapps\common\Grand Theft Auto V Enhanced"
             };
 
             // Try to detect Steam installation path from registry
@@ -46,7 +53,7 @@ namespace GTA5Launcher
                         var steamPath = key.GetValue("SteamPath") as string;
                         if (!string.IsNullOrEmpty(steamPath))
                         {
-                            var gtaPath = Path.Combine(steamPath, "steamapps", "common", "Grand Theft Auto V");
+                            var gtaPath = Path.Combine(steamPath, "steamapps", "common", "Grand Theft Auto V Enhanced");
                             if (!paths.Contains(gtaPath))
                                 paths.Insert(0, gtaPath);
                         }
@@ -60,18 +67,18 @@ namespace GTA5Launcher
 
         private readonly string[] rockstarPaths = new[]
         {
-            @"C:\Program Files\Rockstar Games\Grand Theft Auto V",
-            @"C:\Program Files (x86)\Rockstar Games\Grand Theft Auto V",
-            @"D:\Rockstar Games\Grand Theft Auto V",
-            @"E:\Rockstar Games\Grand Theft Auto V"
+            @"C:\Program Files\Rockstar Games\Grand Theft Auto V Enhanced",
+            @"C:\Program Files (x86)\Rockstar Games\Grand Theft Auto V Enhanced",
+            @"D:\Rockstar Games\Grand Theft Auto V Enhanced",
+            @"E:\Rockstar Games\Grand Theft Auto V Enhanced"
         };
 
         private readonly string[] epicPaths = new[]
         {
-            @"C:\Program Files\Epic Games\GTAV",
-            @"C:\Program Files (x86)\Epic Games\GTAV",
-            @"D:\Epic Games\GTAV",
-            @"E:\Epic Games\GTAV"
+            @"C:\Program Files\Epic Games\GTA",
+            @"C:\Program Files (x86)\Epic Games\GTA",
+            @"D:\Epic Games\GTA",
+            @"E:\Epic Games\GTA"
         };
 
         public List<PlatformInfo> DetectAllInstallations()
@@ -87,7 +94,8 @@ namespace GTA5Launcher
                     {
                         Type = PlatformType.Steam,
                         Name = "Steam",
-                        Path = path
+                        Path = path,
+                        SizeInBytes = GetDirectorySize(path)
                     });
                 }
             }
@@ -101,7 +109,8 @@ namespace GTA5Launcher
                     {
                         Type = PlatformType.Rockstar,
                         Name = "Rockstar Games",
-                        Path = path
+                        Path = path,
+                        SizeInBytes = GetDirectorySize(path)
                     });
                 }
             }
@@ -115,7 +124,8 @@ namespace GTA5Launcher
                     {
                         Type = PlatformType.Epic,
                         Name = "Epic Games",
-                        Path = path
+                        Path = path,
+                        SizeInBytes = GetDirectorySize(path)
                     });
                 }
             }
@@ -135,7 +145,27 @@ namespace GTA5Launcher
                 return false;
 
             var exePath = Path.Combine(path, GAME_EXE);
-            return File.Exists(exePath);
+            if (!File.Exists(exePath))
+                return false;
+
+            // Additional validation: check for other essential files
+            // This helps avoid false positives with Legacy versions
+            var essentialFiles = new[]
+            {
+                "GTA5.exe",
+                "PlayGTAV.exe",
+                "GTAVLauncher.exe"
+            };
+
+            int foundFiles = 0;
+            foreach (var file in essentialFiles)
+            {
+                if (File.Exists(Path.Combine(path, file)))
+                    foundFiles++;
+            }
+
+            // Need at least 2 of the 3 essential files
+            return foundFiles >= 2;
         }
 
         private bool IsGameRunning()
@@ -257,6 +287,27 @@ namespace GTA5Launcher
                     return epicPaths[0];
                 default:
                     return null;
+            }
+        }
+
+        private long GetDirectorySize(string path)
+        {
+            try
+            {
+                var dirInfo = new DirectoryInfo(path);
+                long size = 0;
+
+                // Get all files
+                foreach (FileInfo file in dirInfo.GetFiles("*", SearchOption.AllDirectories))
+                {
+                    size += file.Length;
+                }
+
+                return size;
+            }
+            catch
+            {
+                return 0;
             }
         }
 

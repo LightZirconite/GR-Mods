@@ -51,7 +51,7 @@
                                         <Storyboard>
                                             <ColorAnimation Storyboard.TargetName="shadowEffect"
                                                           Storyboard.TargetProperty="Color"
-                                                          To="#0078D4"
+                                                          To="#00FF00"
                                                           Duration="0:0:0.3"/>
                                             <DoubleAnimation Storyboard.TargetName="shadowEffect"
                                                            Storyboard.TargetProperty="BlurRadius"
@@ -74,7 +74,7 @@
                                         </Storyboard>
                                     </BeginStoryboard>
                                 </Trigger.ExitActions>
-                                <Setter TargetName="border" Property="BorderBrush" Value="#0078D4"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#00FF00"/>
                                 <Setter TargetName="border" Property="BorderThickness" Value="3"/>
                                 <Setter TargetName="border" Property="Background">
                                     <Setter.Value>
@@ -94,7 +94,7 @@
                                         </LinearGradientBrush>
                                     </Setter.Value>
                                 </Setter>
-                                <Setter TargetName="border" Property="BorderBrush" Value="#005A9E"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#00AA00"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="border" Property="Opacity" Value="0.4"/>
