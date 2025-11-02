@@ -1,16 +1,19 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media.Imaging;
 using System.Threading.Tasks;
+using System.Windows.Interop;
 
 namespace GTA5Launcher
 {
     public partial class MainWindow : Window
     {
         private readonly GameManager gameManager;
+        private CancellationTokenSource cancellationTokenSource;
 
         public MainWindow()
         {
@@ -75,6 +78,40 @@ namespace GTA5Launcher
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
             await DetectCurrentInstallation();
+            
+            // Check for updates in background
+            _ = CheckForUpdatesAsync();
+        }
+
+        private async Task CheckForUpdatesAsync()
+        {
+            try
+            {
+                var updateChecker = new UpdateChecker();
+                var (hasUpdate, latestVersion, downloadUrl, releaseNotes) = await updateChecker.CheckForUpdatesAsync();
+
+                if (hasUpdate)
+                {
+                    var result = MessageBox.Show(
+                        $"🎉 Une nouvelle version de GR Mods est disponible !\n\n" +
+                        $"Version actuelle : 1.1.0\n" +
+                        $"Nouvelle version : {latestVersion}\n\n" +
+                        $"Voulez-vous télécharger la mise à jour ?",
+                        "Mise à jour disponible",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Information);
+
+                    if (result == MessageBoxResult.Yes)
+                    {
+                        updateChecker.OpenDownloadPage(downloadUrl);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"Erreur lors de la vérification des mises à jour : {ex.Message}");
+                // Don't show error to user, just log it
+            }
         }
 
         private async Task DetectCurrentInstallation()
@@ -109,8 +146,30 @@ namespace GTA5Launcher
                 }
                 else
                 {
-                    CurrentLocationText.Text = $"✓ Plateforme : {currentPlatform.Name}\n📂 Chemin : {currentPlatform.Path}\n💾 Taille : {currentPlatform.GetSizeFormatted()}";
+                    string modsInfo = "";
+                    if (currentPlatform.HasMods && currentPlatform.DetectedMods.Count > 0)
+                    {
+                        modsInfo = $"\n⚠️ Mods détectés : {string.Join(", ", currentPlatform.DetectedMods.Take(3))}" +
+                                  (currentPlatform.DetectedMods.Count > 3 ? $"... (+{currentPlatform.DetectedMods.Count - 3})" : "");
+                    }
+                    
+                    CurrentLocationText.Text = $"✓ Plateforme : {currentPlatform.Name}\n" +
+                                              $"📂 Chemin : {currentPlatform.Path}\n" +
+                                              $"💾 Taille : {currentPlatform.GetSizeFormatted()}" + modsInfo;
                     StatusText.Text = $"✓ GTA V trouvé sur {currentPlatform.Name} ({currentPlatform.GetSizeFormatted()})";
+                    
+                    // Show warning if mods detected
+                    if (currentPlatform.HasMods)
+                    {
+                        MessageBox.Show(
+                            $"⚠️ Des mods ont été détectés dans votre installation GTA V :\n\n" +
+                            string.Join("\n", currentPlatform.DetectedMods.Select(m => $"• {m}")) +
+                            $"\n\nATTENTION : Les mods peuvent ne pas fonctionner correctement après un changement de plateforme.\n" +
+                            $"Assurez-vous de sauvegarder vos mods avant de continuer.",
+                            "Mods détectés",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Warning);
+                    }
                 }
                 
                 // Show active badge and disable current platform button
@@ -197,15 +256,48 @@ namespace GTA5Launcher
 
             DisableAllButtons();
             ProgressBar.Visibility = Visibility.Visible;
-            ProgressBar.IsIndeterminate = true;
-            StatusText.Text = $"🔄 Déplacement vers {platformName} en cours...";
+            ProgressBar.IsIndeterminate = false;
+            ProgressBar.Value = 0;
+            StatusText.Text = $"🔄 Préparation du déplacement vers {platformName}...";
+
+            cancellationTokenSource = new CancellationTokenSource();
+            var progress = new Progress<ProgressInfo>(progressInfo =>
+            {
+                // Update UI on UI thread
+                Dispatcher.Invoke(() =>
+                {
+                    ProgressBar.Value = progressInfo.PercentComplete;
+                    
+                    string speedText = progressInfo.SpeedMBps > 0 
+                        ? $" • {progressInfo.SpeedMBps:F1} MB/s" 
+                        : "";
+                    
+                    string etaText = progressInfo.EstimatedTimeRemaining.TotalSeconds > 0 
+                        ? $" • Temps restant: {FormatTimeSpan(progressInfo.EstimatedTimeRemaining)}" 
+                        : "";
+                    
+                    StatusText.Text = $"🔄 {progressInfo.PercentComplete:F1}% - {progressInfo.CurrentFile}{speedText}{etaText}";
+                });
+            });
 
             try
             {
-                var success = await Task.Run(() => gameManager.MoveGameToPlatform(targetPlatform));
+                var success = await Task.Run(() => 
+                    gameManager.MoveGameToPlatform(targetPlatform, progress, cancellationTokenSource.Token));
 
                 if (success)
                 {
+                    // Show notification
+                    var notificationService = new NotificationService();
+                    notificationService.ShowNotification(
+                        "GR Mods - Transfert terminé",
+                        $"GTA V a été déplacé avec succès vers {platformName} !"
+                    );
+                    
+                    // Flash window if not focused
+                    var windowHandle = new WindowInteropHelper(this).Handle;
+                    notificationService.FlashWindow(windowHandle);
+                    
                     MessageBox.Show(
                         $"✓ GTA V a été déplacé avec succès vers {platformName} !",
                         "Succès",
@@ -226,6 +318,16 @@ namespace GTA5Launcher
                     EnableAllButtons();
                 }
             }
+            catch (OperationCanceledException)
+            {
+                MessageBox.Show(
+                    "⏸️ Opération annulée par l'utilisateur.",
+                    "Annulé",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                
+                EnableAllButtons();
+            }
             catch (Exception ex)
             {
                 MessageBox.Show(
@@ -240,6 +342,35 @@ namespace GTA5Launcher
             {
                 ProgressBar.Visibility = Visibility.Collapsed;
                 ProgressBar.IsIndeterminate = false;
+                cancellationTokenSource?.Dispose();
+                cancellationTokenSource = null;
+            }
+        }
+
+        private string FormatTimeSpan(TimeSpan timeSpan)
+        {
+            if (timeSpan.TotalHours >= 1)
+                return $"{(int)timeSpan.TotalHours}h {timeSpan.Minutes}m";
+            else if (timeSpan.TotalMinutes >= 1)
+                return $"{(int)timeSpan.TotalMinutes}m {timeSpan.Seconds}s";
+            else
+                return $"{timeSpan.Seconds}s";
+        }
+
+        private void LogsButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var logViewer = new LogViewerWindow();
+                logViewer.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    $"Erreur lors de l'ouverture du viewer de logs :\n{ex.Message}",
+                    "Erreur",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
             }
         }
 

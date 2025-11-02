@@ -212,6 +212,11 @@
                                FontWeight="SemiBold"
                                Foreground="#E0E0E0"/>
                 </StackPanel>
+                <Button Content="📋 Logs" 
+                        Click="LogsButton_Click"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Center"
+                        Style="{StaticResource ActionButton}"/>
                 <ProgressBar x:Name="ProgressBar" 
                              Height="25" 
                              Visibility="Collapsed" 

@@ -17,7 +17,7 @@ $assetsSource = "$projectRoot\assets"
 $assetsTarget = "$publishDir\assets"
 $innoSetupScript = "$projectRoot\GR-Mods-Setup.iss"
 $innoSetupCompiler = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-$installerOutput = "$projectRoot\Installer\GR-Mods-Setup-1.0.0.exe"
+$installerOutput = "$projectRoot\Installer\GR-Mods-Setup-1.1.0.exe"
 $exeFolder = "$projectRoot\exe"
 $finalExe = "$exeFolder\GR-Mods-Setup.exe"
 
