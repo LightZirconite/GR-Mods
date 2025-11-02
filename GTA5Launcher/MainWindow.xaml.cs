@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media.Imaging;
 using System.Threading.Tasks;
 
 namespace GTA5Launcher
@@ -17,26 +18,58 @@ namespace GTA5Launcher
             gameManager = new GameManager();
             Loaded += MainWindow_Loaded;
             
-            // Vérifier que les images sont bien chargées
-            CheckImages();
+            // Load images properly
+            LoadPlatformImages();
         }
 
-        private void CheckImages()
+        private void LoadPlatformImages()
         {
             try
             {
-                // Log pour debug
-                var assetsPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "assets");
-                if (!System.IO.Directory.Exists(assetsPath))
+                string assetsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "assets");
+                
+                // Load Steam image
+                string steamPath = Path.Combine(assetsPath, "steam.png");
+                if (File.Exists(steamPath))
                 {
-                    MessageBox.Show(
-                        $"ATTENTION: Le dossier assets est manquant!\nChemin attendu: {assetsPath}\n\nLes images ne s'afficheront pas correctement.",
-                        "Images manquantes",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Warning);
+                    SteamImage.Source = new BitmapImage(new Uri(steamPath, UriKind.Absolute));
+                }
+                else
+                {
+                    LogMessage($"Steam image not found at: {steamPath}");
+                }
+                
+                // Load Rockstar image
+                string rockstarPath = Path.Combine(assetsPath, "rockstar.png");
+                if (File.Exists(rockstarPath))
+                {
+                    RockstarImage.Source = new BitmapImage(new Uri(rockstarPath, UriKind.Absolute));
+                }
+                else
+                {
+                    LogMessage($"Rockstar image not found at: {rockstarPath}");
+                }
+                
+                // Load Epic image
+                string epicPath = Path.Combine(assetsPath, "epic-games.png");
+                if (File.Exists(epicPath))
+                {
+                    EpicImage.Source = new BitmapImage(new Uri(epicPath, UriKind.Absolute));
+                }
+                else
+                {
+                    LogMessage($"Epic image not found at: {epicPath}");
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                LogMessage($"Error loading images: {ex.Message}");
+                MessageBox.Show(
+                    $"Attention: Certaines images n'ont pas pu être chargées.\n\nErreur: {ex.Message}",
+                    "Images manquantes",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
         }
 
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -62,8 +95,7 @@ namespace GTA5Launcher
                                               $"Plateformes : {platforms}\n\n" +
                                               $"Installation principale : {currentPlatform.Name}\n" +
                                               $"Chemin : {currentPlatform.Path}\n\n" +
-                                              $"Il est recommandé de n'avoir qu'une seule installation.\n" +
-                                              $"Supprimez les copies inutiles avant d'utiliser ce launcher.";
+                                              $"Il est recommandé de n'avoir qu'une seule installation.";
                     StatusText.Text = $"⚠️ {allInstallations.Count} installations trouvées - Nettoyage recommandé";
                     
                     MessageBox.Show(
@@ -77,32 +109,46 @@ namespace GTA5Launcher
                 }
                 else
                 {
-                    CurrentLocationText.Text = $"Plateforme : {currentPlatform.Name}\nChemin : {currentPlatform.Path}";
-                    StatusText.Text = $"GTA V trouvé sur {currentPlatform.Name}";
+                    CurrentLocationText.Text = $"✓ Plateforme : {currentPlatform.Name}\n📂 Chemin : {currentPlatform.Path}";
+                    StatusText.Text = $"✓ GTA V trouvé sur {currentPlatform.Name}";
                 }
                 
-                // Disable current platform button
-                DisableCurrentPlatformButton(currentPlatform.Type);
+                // Show active badge and disable current platform button
+                ShowActivePlatform(currentPlatform.Type);
             }
             else
             {
-                CurrentLocationText.Text = "GTA V n'a pas été trouvé sur votre système.\nVeuillez vérifier que le jeu est installé.";
-                StatusText.Text = "Aucune installation détectée";
+                CurrentLocationText.Text = "❌ GTA V n'a pas été trouvé sur votre système.\nVeuillez vérifier que le jeu est installé.";
+                StatusText.Text = "❌ Aucune installation détectée";
                 DisableAllButtons();
             }
         }
 
-        private void DisableCurrentPlatformButton(PlatformType type)
+        private void ShowActivePlatform(PlatformType type)
         {
+            // Hide all badges first
+            SteamActiveBadge.Visibility = Visibility.Collapsed;
+            RockstarActiveBadge.Visibility = Visibility.Collapsed;
+            EpicActiveBadge.Visibility = Visibility.Collapsed;
+            
+            // Enable all buttons
+            SteamButton.IsEnabled = true;
+            RockstarButton.IsEnabled = true;
+            EpicButton.IsEnabled = true;
+            
+            // Show active badge and disable button for current platform
             switch (type)
             {
                 case PlatformType.Steam:
+                    SteamActiveBadge.Visibility = Visibility.Visible;
                     SteamButton.IsEnabled = false;
                     break;
                 case PlatformType.Rockstar:
+                    RockstarActiveBadge.Visibility = Visibility.Visible;
                     RockstarButton.IsEnabled = false;
                     break;
                 case PlatformType.Epic:
+                    EpicActiveBadge.Visibility = Visibility.Visible;
                     EpicButton.IsEnabled = false;
                     break;
             }
@@ -152,7 +198,7 @@ namespace GTA5Launcher
             DisableAllButtons();
             ProgressBar.Visibility = Visibility.Visible;
             ProgressBar.IsIndeterminate = true;
-            StatusText.Text = $"Déplacement vers {platformName} en cours...";
+            StatusText.Text = $"🔄 Déplacement vers {platformName} en cours...";
 
             try
             {
@@ -161,7 +207,7 @@ namespace GTA5Launcher
                 if (success)
                 {
                     MessageBox.Show(
-                        $"GTA V a été déplacé avec succès vers {platformName} !",
+                        $"✓ GTA V a été déplacé avec succès vers {platformName} !",
                         "Succès",
                         MessageBoxButton.OK,
                         MessageBoxImage.Information);
@@ -171,7 +217,7 @@ namespace GTA5Launcher
                 else
                 {
                     MessageBox.Show(
-                        $"Erreur lors du déplacement vers {platformName}.\n" +
+                        $"❌ Erreur lors du déplacement vers {platformName}.\n" +
                         $"Vérifiez les logs pour plus d'informations.",
                         "Erreur",
                         MessageBoxButton.OK,
@@ -183,7 +229,7 @@ namespace GTA5Launcher
             catch (Exception ex)
             {
                 MessageBox.Show(
-                    $"Une erreur est survenue :\n{ex.Message}",
+                    $"❌ Une erreur est survenue :\n{ex.Message}",
                     "Erreur",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
@@ -194,6 +240,31 @@ namespace GTA5Launcher
             {
                 ProgressBar.Visibility = Visibility.Collapsed;
                 ProgressBar.IsIndeterminate = false;
+            }
+        }
+
+        private void LogMessage(string message)
+        {
+            try
+            {
+                string logPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "GTA5Launcher",
+                    "logs.txt"
+                );
+
+                string logDir = Path.GetDirectoryName(logPath);
+                if (!Directory.Exists(logDir))
+                {
+                    Directory.CreateDirectory(logDir);
+                }
+
+                string logEntry = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {message}\n";
+                File.AppendAllText(logPath, logEntry);
+            }
+            catch
+            {
+                // Silent fail for logging
             }
         }
     }

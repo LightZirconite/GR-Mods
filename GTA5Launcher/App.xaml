@@ -3,41 +3,123 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
+        <!-- Platform Button Style -->
         <Style TargetType="Button" x:Key="PlatformButton">
-            <Setter Property="Background" Value="#2C2C2C"/>
+            <Setter Property="Background">
+                <Setter.Value>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <GradientStop Color="#2C2C2C" Offset="0"/>
+                        <GradientStop Color="#1E1E1E" Offset="1"/>
+                    </LinearGradientBrush>
+                </Setter.Value>
+            </Setter>
             <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderBrush" Value="#444444"/>
+            <Setter Property="BorderBrush" Value="#555555"/>
             <Setter Property="BorderThickness" Value="2"/>
-            <Setter Property="FontSize" Value="16"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Padding" Value="20,10"/>
-            <Setter Property="Margin" Value="10"/>
+            <Setter Property="FontSize" Value="18"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Padding" Value="20,15"/>
+            <Setter Property="Margin" Value="15"/>
             <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Effect">
+                <Setter.Value>
+                    <DropShadowEffect Color="#000000" BlurRadius="15" ShadowDepth="5" Opacity="0.7"/>
+                </Setter.Value>
+            </Setter>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}"
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="10"
+                                CornerRadius="15"
                                 Padding="{TemplateBinding Padding}">
+                            <Border.Effect>
+                                <DropShadowEffect x:Name="shadowEffect" 
+                                                Color="#000000" 
+                                                BlurRadius="15" 
+                                                ShadowDepth="5" 
+                                                Opacity="0.7"/>
+                            </Border.Effect>
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <ColorAnimation Storyboard.TargetName="shadowEffect"
+                                                          Storyboard.TargetProperty="Color"
+                                                          To="#0078D4"
+                                                          Duration="0:0:0.3"/>
+                                            <DoubleAnimation Storyboard.TargetName="shadowEffect"
+                                                           Storyboard.TargetProperty="BlurRadius"
+                                                           To="25"
+                                                           Duration="0:0:0.3"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <ColorAnimation Storyboard.TargetName="shadowEffect"
+                                                          Storyboard.TargetProperty="Color"
+                                                          To="#000000"
+                                                          Duration="0:0:0.3"/>
+                                            <DoubleAnimation Storyboard.TargetName="shadowEffect"
+                                                           Storyboard.TargetProperty="BlurRadius"
+                                                           To="15"
+                                                           Duration="0:0:0.3"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#0078D4"/>
+                                <Setter TargetName="border" Property="BorderThickness" Value="3"/>
+                                <Setter TargetName="border" Property="Background">
+                                    <Setter.Value>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                            <GradientStop Color="#3C3C3C" Offset="0"/>
+                                            <GradientStop Color="#2C2C2C" Offset="1"/>
+                                        </LinearGradientBrush>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background">
+                                    <Setter.Value>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                            <GradientStop Color="#1C1C1C" Offset="0"/>
+                                            <GradientStop Color="#0C0C0C" Offset="1"/>
+                                        </LinearGradientBrush>
+                                    </Setter.Value>
+                                </Setter>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#005A9E"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="border" Property="Opacity" Value="0.4"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#00FF00"/>
+                                <Setter TargetName="border" Property="BorderThickness" Value="3"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
-            <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#3C3C3C"/>
-                    <Setter Property="BorderBrush" Value="#0078D4"/>
-                </Trigger>
-                <Trigger Property="IsPressed" Value="True">
-                    <Setter Property="Background" Value="#1C1C1C"/>
-                </Trigger>
-                <Trigger Property="IsEnabled" Value="False">
-                    <Setter Property="Opacity" Value="0.5"/>
-                </Trigger>
-            </Style.Triggers>
+        </Style>
+
+        <!-- Active Platform Badge Style -->
+        <Style TargetType="Border" x:Key="ActiveBadge">
+            <Setter Property="Background" Value="#00FF00"/>
+            <Setter Property="CornerRadius" Value="15"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Bottom"/>
+            <Setter Property="Margin" Value="0,10,0,0"/>
+            <Setter Property="Effect">
+                <Setter.Value>
+                    <DropShadowEffect Color="#00FF00" BlurRadius="10" ShadowDepth="0" Opacity="0.8"/>
+                </Setter.Value>
+            </Setter>
         </Style>
     </Application.Resources>
 </Application>
