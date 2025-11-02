@@ -32,7 +32,9 @@ namespace GTA5Launcher
     public class GameManager
     {
         private const string GAME_FOLDER_NAME = "Grand Theft Auto V";
-        private const string GAME_EXE = "GTA5.exe";
+        // Enhanced version uses GTA5_Enhanced.exe instead of GTA5.exe
+        private const string GAME_EXE_ENHANCED = "GTA5_Enhanced.exe";
+        private const string GAME_EXE_LEGACY = "GTA5.exe";
 
         private List<string> GetSteamLibraryPaths()
         {
@@ -130,6 +132,13 @@ namespace GTA5Launcher
                 }
             }
 
+            // Fallback: Search in all drives if nothing found
+            if (installations.Count == 0)
+            {
+                LogMessage("No installations found in standard paths, performing deep search...");
+                installations = PerformDeepSearch();
+            }
+
             return installations;
         }
 
@@ -144,34 +153,38 @@ namespace GTA5Launcher
             if (!Directory.Exists(path))
                 return false;
 
-            var exePath = Path.Combine(path, GAME_EXE);
-            if (!File.Exists(exePath))
+            // Check for Enhanced version first (priority)
+            var exePathEnhanced = Path.Combine(path, GAME_EXE_ENHANCED);
+            var exePathLegacy = Path.Combine(path, GAME_EXE_LEGACY);
+            
+            bool hasEnhanced = File.Exists(exePathEnhanced);
+            bool hasLegacy = File.Exists(exePathLegacy);
+            
+            // Must have at least one main exe
+            if (!hasEnhanced && !hasLegacy)
                 return false;
 
-            // Additional validation: check for other essential files
-            // This helps avoid false positives with Legacy versions
-            var essentialFiles = new[]
-            {
-                "GTA5.exe",
-                "PlayGTAV.exe",
-                "GTAVLauncher.exe"
-            };
+            // Additional validation: check for PlayGTAV.exe (present in all versions)
+            var playGTAPath = Path.Combine(path, "PlayGTAV.exe");
+            if (!File.Exists(playGTAPath))
+                return false;
 
-            int foundFiles = 0;
-            foreach (var file in essentialFiles)
+            // We target Enhanced version primarily
+            // If folder name contains "Enhanced", it must have GTA5_Enhanced.exe
+            if (path.Contains("Enhanced", StringComparison.OrdinalIgnoreCase))
             {
-                if (File.Exists(Path.Combine(path, file)))
-                    foundFiles++;
+                return hasEnhanced;
             }
 
-            // Need at least 2 of the 3 essential files
-            return foundFiles >= 2;
+            return true;
         }
 
         private bool IsGameRunning()
         {
-            var processes = Process.GetProcessesByName("GTA5");
-            return processes.Length > 0;
+            // Check both Enhanced and Legacy versions
+            var processesEnhanced = Process.GetProcessesByName("GTA5_Enhanced");
+            var processesLegacy = Process.GetProcessesByName("GTA5");
+            return processesEnhanced.Length > 0 || processesLegacy.Length > 0;
         }
 
         public bool MoveGameToPlatform(PlatformType targetPlatform)
@@ -308,6 +321,121 @@ namespace GTA5Launcher
             catch
             {
                 return 0;
+            }
+        }
+
+        private List<PlatformInfo> PerformDeepSearch()
+        {
+            var installations = new List<PlatformInfo>();
+            LogMessage("Starting deep search across all drives...");
+
+            try
+            {
+                // Get all available drives
+                var drives = DriveInfo.GetDrives()
+                    .Where(d => d.IsReady && d.DriveType == DriveType.Fixed)
+                    .ToList();
+
+                foreach (var drive in drives)
+                {
+                    LogMessage($"Scanning drive: {drive.Name}");
+                    
+                    // Search in common game directories
+                    var searchPaths = new[]
+                    {
+                        Path.Combine(drive.Name, "Program Files", "Rockstar Games"),
+                        Path.Combine(drive.Name, "Program Files (x86)", "Rockstar Games"),
+                        Path.Combine(drive.Name, "Program Files", "Epic Games"),
+                        Path.Combine(drive.Name, "Program Files (x86)", "Epic Games"),
+                        Path.Combine(drive.Name, "Program Files (x86)", "Steam", "steamapps", "common"),
+                        Path.Combine(drive.Name, "Steam", "steamapps", "common"),
+                        Path.Combine(drive.Name, "SteamLibrary", "steamapps", "common"),
+                        Path.Combine(drive.Name, "Games"),
+                        Path.Combine(drive.Name, "Rockstar Games"),
+                        Path.Combine(drive.Name, "Epic Games")
+                    };
+
+                    foreach (var searchPath in searchPaths)
+                    {
+                        if (!Directory.Exists(searchPath))
+                            continue;
+
+                        try
+                        {
+                            // Look for GTA V folders
+                            var gtaFolders = Directory.GetDirectories(searchPath, "*Grand Theft Auto*", SearchOption.TopDirectoryOnly)
+                                .Concat(Directory.GetDirectories(searchPath, "GTA*", SearchOption.TopDirectoryOnly))
+                                .ToList();
+
+                            foreach (var folder in gtaFolders)
+                            {
+                                if (IsValidGTAInstallation(folder))
+                                {
+                                    var platformType = DeterminePlatformFromPath(folder);
+                                    var platformName = GetPlatformName(platformType);
+
+                                    // Check if not already in list
+                                    if (!installations.Any(i => i.Path.Equals(folder, StringComparison.OrdinalIgnoreCase)))
+                                    {
+                                        installations.Add(new PlatformInfo
+                                        {
+                                            Type = platformType,
+                                            Name = platformName,
+                                            Path = folder,
+                                            SizeInBytes = GetDirectorySize(folder)
+                                        });
+                                        
+                                        LogMessage($"Found installation: {folder} ({platformName})");
+                                    }
+                                }
+                            }
+                        }
+                        catch (UnauthorizedAccessException)
+                        {
+                            // Skip directories we don't have access to
+                            continue;
+                        }
+                        catch (Exception ex)
+                        {
+                            LogMessage($"Error searching {searchPath}: {ex.Message}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"Error during deep search: {ex.Message}");
+            }
+
+            LogMessage($"Deep search completed. Found {installations.Count} installation(s).");
+            return installations;
+        }
+
+        private PlatformType DeterminePlatformFromPath(string path)
+        {
+            if (path.Contains("Steam", StringComparison.OrdinalIgnoreCase))
+                return PlatformType.Steam;
+            if (path.Contains("Epic", StringComparison.OrdinalIgnoreCase))
+                return PlatformType.Epic;
+            if (path.Contains("Rockstar", StringComparison.OrdinalIgnoreCase))
+                return PlatformType.Rockstar;
+            
+            // Default to Rockstar if unknown
+            return PlatformType.Rockstar;
+        }
+
+        private string GetPlatformName(PlatformType type)
+        {
+            switch (type)
+            {
+                case PlatformType.Steam:
+                    return "Steam";
+                case PlatformType.Rockstar:
+                    return "Rockstar Games";
+                case PlatformType.Epic:
+                    return "Epic Games";
+                default:
+                    return "Unknown";
             }
         }
 
