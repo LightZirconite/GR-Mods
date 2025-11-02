@@ -2,7 +2,7 @@
 ; Cet installeur installe l'application GR Mods sur le système
 
 #define MyAppName "GR Mods"
-#define MyAppVersion "0.0.1"
+#define MyAppVersion "1.1.0"
 #define MyAppPublisher "LightZirconite"
 #define MyAppExeName "GR-Mods.exe"
 #define MyAppURL "https://github.com/LightZirconite/GR-Mods"

@@ -17,7 +17,6 @@ $assetsSource = "$projectRoot\assets"
 $assetsTarget = "$publishDir\assets"
 $innoSetupScript = "$projectRoot\GR-Mods-Setup.iss"
 $innoSetupCompiler = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-$installerOutput = "$projectRoot\Installer\GR-Mods-Setup-1.1.0.exe"
 $exeFolder = "$projectRoot\exe"
 $finalExe = "$exeFolder\GR-Mods-Setup.exe"
 
@@ -42,7 +41,7 @@ Write-Host ""
 # Etape 2: Compiler l'application
 Write-Host "[2/6] Compilation de l'application..." -ForegroundColor Yellow
 Set-Location $projectRoot
-$buildResult = dotnet publish $projectFile -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true --nologo --verbosity quiet 2>&1
+$buildResult = dotnet publish $projectFile -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true --nologo --verbosity minimal 2>&1
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "ERREUR: La compilation a echoue!" -ForegroundColor Red
@@ -85,8 +84,19 @@ if (Test-Path $finalExe) {
     Write-Host "   Ancien installeur supprime" -ForegroundColor Gray
 }
 
+# Chercher le fichier de l'installeur (peut avoir un nom variable)
+$installerFiles = Get-ChildItem -Path "$projectRoot\Installer" -Filter "GR-Mods-Setup-*.exe" -ErrorAction SilentlyContinue
+if ($installerFiles.Count -eq 0) {
+    Write-Host "ERREUR: Aucun installeur trouve dans le dossier Installer!" -ForegroundColor Red
+    exit 1
+}
+
+# Prendre le premier fichier trouvé
+$actualInstaller = $installerFiles[0].FullName
+Write-Host "   Installeur trouve: $($installerFiles[0].Name)" -ForegroundColor Gray
+
 # Copier le nouveau exe
-Copy-Item -Path $installerOutput -Destination $finalExe -Force
+Copy-Item -Path $actualInstaller -Destination $finalExe -Force
 Write-Host "   Installeur copie vers: $finalExe" -ForegroundColor Green
 
 # Nettoyer le dossier Installer (plus besoin apres la copie)
@@ -110,8 +120,13 @@ Write-Host "Installeur final:" -ForegroundColor Yellow
 Write-Host "  $finalExe" -ForegroundColor White
 Write-Host ""
 
-$exeSize = (Get-Item $finalExe).Length / 1MB
-Write-Host "Taille: $([math]::Round($exeSize, 2)) MB" -ForegroundColor Gray
+if (Test-Path $finalExe) {
+    $exeSize = (Get-Item $finalExe).Length / 1MB
+    Write-Host "Taille: $([math]::Round($exeSize, 2)) MB" -ForegroundColor Gray
+} else {
+    Write-Host "AVERTISSEMENT: Le fichier final n'a pas ete trouve!" -ForegroundColor Yellow
+}
+
 Write-Host "Duree: $([math]::Round($duration, 1)) secondes" -ForegroundColor Gray
 Write-Host ""
 Write-Host "L'installeur est pret a etre distribue!" -ForegroundColor Green
