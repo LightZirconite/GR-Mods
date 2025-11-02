@@ -26,6 +26,12 @@ namespace GTA5Launcher
         public TimeSpan EstimatedTimeRemaining { get; set; }
     }
 
+    public class FileSnapshot
+    {
+        public string RelativePath { get; set; }
+        public long Size { get; set; }
+    }
+
     public class PlatformInfo
     {
         public PlatformType Type { get; set; }
@@ -241,32 +247,26 @@ namespace GTA5Launcher
             {
                 LogMessage("Vérification de l'intégrité de l'installation...");
                 
-                // Check essential executables
-                var essentialFiles = new[]
-                {
-                    "PlayGTAV.exe",
-                    "GTA5.exe",
-                    "GTAVLauncher.exe"
-                };
-
-                // Check for Enhanced version
+                // Check for main executable (Enhanced or Legacy)
                 var enhancedExe = Path.Combine(path, GAME_EXE_ENHANCED);
-                if (File.Exists(enhancedExe))
+                var legacyExe = Path.Combine(path, GAME_EXE_LEGACY);
+                
+                bool hasMainExe = File.Exists(enhancedExe) || File.Exists(legacyExe);
+                if (!hasMainExe)
                 {
-                    essentialFiles = new[] { "PlayGTAV.exe", GAME_EXE_ENHANCED, "GTAVLauncher.exe" };
+                    LogMessage("Fichier manquant : Aucun exécutable principal trouvé (GTA5_Enhanced.exe ou GTA5.exe)");
+                    return false;
                 }
 
-                foreach (var file in essentialFiles)
+                // Check for PlayGTAV.exe (present in all versions)
+                var playGTAPath = Path.Combine(path, "PlayGTAV.exe");
+                if (!File.Exists(playGTAPath))
                 {
-                    var filePath = Path.Combine(path, file);
-                    if (!File.Exists(filePath))
-                    {
-                        LogMessage($"Fichier manquant : {file}");
-                        return false;
-                    }
+                    LogMessage("Fichier manquant : PlayGTAV.exe");
+                    return false;
                 }
 
-                // Check for essential game files
+                // Check for essential game folders
                 var essentialFolders = new[] { "update", "x64" };
                 foreach (var folder in essentialFolders)
                 {
@@ -284,6 +284,90 @@ namespace GTA5Launcher
             catch (Exception ex)
             {
                 LogMessage($"Erreur lors de la vérification d'intégrité : {ex.Message}");
+                return false;
+            }
+        }
+
+        private List<FileSnapshot> CreateFileSnapshot(string rootPath)
+        {
+            var snapshot = new List<FileSnapshot>();
+            
+            try
+            {
+                LogMessage($"Création du snapshot de {rootPath}...");
+                
+                var allFiles = Directory.GetFiles(rootPath, "*", SearchOption.AllDirectories);
+                
+                foreach (var file in allFiles)
+                {
+                    try
+                    {
+                        var fileInfo = new FileInfo(file);
+                        var relativePath = file.Substring(rootPath.Length).TrimStart('\\', '/');
+                        
+                        snapshot.Add(new FileSnapshot
+                        {
+                            RelativePath = relativePath,
+                            Size = fileInfo.Length
+                        });
+                    }
+                    catch
+                    {
+                        // Skip files we can't access
+                        continue;
+                    }
+                }
+                
+                LogMessage($"Snapshot créé : {snapshot.Count} fichiers répertoriés");
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"Erreur lors de la création du snapshot : {ex.Message}");
+            }
+            
+            return snapshot;
+        }
+
+        private bool VerifyFileSnapshot(string rootPath, List<FileSnapshot> originalSnapshot)
+        {
+            try
+            {
+                LogMessage($"Vérification du snapshot sur {rootPath}...");
+                
+                int missingFiles = 0;
+                int sizeMismatchFiles = 0;
+                
+                foreach (var originalFile in originalSnapshot)
+                {
+                    var targetFilePath = Path.Combine(rootPath, originalFile.RelativePath);
+                    
+                    if (!File.Exists(targetFilePath))
+                    {
+                        LogMessage($"Fichier manquant : {originalFile.RelativePath}");
+                        missingFiles++;
+                        continue;
+                    }
+                    
+                    var targetFileInfo = new FileInfo(targetFilePath);
+                    if (targetFileInfo.Length != originalFile.Size)
+                    {
+                        LogMessage($"Taille différente : {originalFile.RelativePath} (original: {originalFile.Size} bytes, cible: {targetFileInfo.Length} bytes)");
+                        sizeMismatchFiles++;
+                    }
+                }
+                
+                if (missingFiles > 0 || sizeMismatchFiles > 0)
+                {
+                    LogMessage($"Vérification échouée : {missingFiles} fichiers manquants, {sizeMismatchFiles} fichiers avec taille différente");
+                    return false;
+                }
+                
+                LogMessage($"Vérification réussie : tous les {originalSnapshot.Count} fichiers sont présents et identiques");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"Erreur lors de la vérification du snapshot : {ex.Message}");
                 return false;
             }
         }
@@ -477,6 +561,9 @@ namespace GTA5Launcher
                     throw new Exception($"Le répertoire cible existe déjà : {targetPath}");
                 }
 
+                // Create snapshot of all files BEFORE moving
+                List<FileSnapshot> fileSnapshot = CreateFileSnapshot(currentInstallation.Path);
+
                 // Try simple move first (works if same drive)
                 try
                 {
@@ -501,11 +588,11 @@ namespace GTA5Launcher
                     LogMessage("Déplacement entre disques terminé");
                 }
                 
-                // Verify integrity after move
-                if (!VerifyInstallationIntegrity(targetPath))
+                // Verify integrity with snapshot
+                if (!VerifyFileSnapshot(targetPath, fileSnapshot))
                 {
-                    throw new Exception("Erreur : La vérification d'intégrité a échoué après le déplacement.\n\n" +
-                                      "Le jeu a été déplacé mais certains fichiers essentiels sont manquants.");
+                    throw new Exception("Erreur : La vérification par snapshot a échoué.\n\n" +
+                                      "Certains fichiers sont manquants ou ont une taille différente après le déplacement.");
                 }
                 
                 LogMessage("Déplacement terminé avec succès");
