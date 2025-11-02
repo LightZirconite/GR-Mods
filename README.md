@@ -1,36 +1,71 @@
-# GTA V Enhanced Launcher
+# GR Mods - GTA V Platform Launcher
 
 Un launcher intelligent pour GTA V qui permet de déplacer le jeu entre différentes plateformes (Steam, Rockstar Games, Epic Games) sans avoir à maintenir plusieurs copies du jeu.
 
-## Fonctionnalités
+## ✨ Fonctionnalités
 
-- **Détection automatique** : Trouve automatiquement où GTA V est installé
-- **Interface moderne** : Interface WPF élégante et intuitive avec les logos des plateformes
-- **Déplacement simple** : Un clic pour déplacer le jeu vers la plateforme de votre choix
-- **Permissions admin** : Demande automatiquement les droits administrateur nécessaires
-- **Sécurisé** : Système de rollback en cas d'erreur pendant le déplacement
+- **Détection automatique intelligente** : Trouve GTA V sur toutes les plateformes, même sur différents disques
+- **Détection Steam dynamique** : Lit le registre Windows pour trouver votre bibliothèque Steam
+- **Interface moderne** : Interface WPF élégante avec logos des plateformes
+- **Déplacement robuste** : Gère les déplacements entre disques différents automatiquement
+- **Sécurité maximale** : 
+  - Vérifie que GTA V n'est pas en cours d'exécution
+  - Système de rollback en cas d'erreur
+  - Demande les droits administrateur
+- **Détection multiple** : Avertit si plusieurs installations sont présentes
+- **Logs détaillés** : Tous les événements sont enregistrés pour le débogage
 
-## Prérequis
+## 🚀 Installation
 
-- Windows 10 ou supérieur
-- .NET 6.0 ou supérieur
-- Visual Studio 2022 (pour compiler)
-- Droits administrateur
+### Méthode simple (Recommandée)
 
-## Installation
+1. Téléchargez `GR-Mods-Setup.exe` depuis le dossier `exe/`
+2. Lancez l'installeur en tant qu'administrateur
+3. Suivez l'assistant d'installation
+4. L'application sera installée dans `C:\Program Files\GR Mods\`
 
-1. Clonez ce repository
-2. Ouvrez `GTA5Launcher.sln` dans Visual Studio 2022
-3. Compilez le projet en mode Release
-4. L'exécutable se trouvera dans `bin/Release/net6.0-windows/`
+### Build depuis les sources
 
-## Utilisation
+**Prérequis :**
+- .NET 8.0 SDK
+- Inno Setup 6 (pour créer l'installeur)
 
-1. Lancez `GTA5Launcher.exe` en tant qu'administrateur
-2. Le launcher détectera automatiquement où GTA V est installé
-3. Cliquez sur le logo de la plateforme vers laquelle vous souhaitez déplacer le jeu
-4. Confirmez l'opération
-5. Attendez la fin du déplacement (cela peut prendre plusieurs minutes)
+**Compilation automatique :**
+```powershell
+cd C:\Users\Light\Documents\GR-Mods
+.\build.ps1
+```
+
+Le script fait automatiquement :
+- Nettoyage des anciens builds
+- Compilation de l'application
+- Copie des assets (logos)
+- Création de l'installeur
+- Copie de l'installeur dans `exe/`
+- Nettoyage des fichiers temporaires
+
+## 📋 Utilisation
+
+1. Lancez **GR Mods** (droits administrateur requis)
+2. Le launcher détecte automatiquement où GTA V est installé
+3. Si plusieurs installations sont trouvées, un avertissement s'affiche
+4. Cliquez sur le logo de la plateforme cible
+5. Confirmez le déplacement
+6. Attendez la fin du transfert (peut prendre plusieurs minutes)
+
+**Note** : Le launcher gère automatiquement les déplacements entre disques différents.
+
+## ⚙️ Améliorations techniques
+
+### v1.0 (Actuelle)
+- ✅ Détection Steam via registre Windows
+- ✅ Vérification que GTA V n'est pas lancé
+- ✅ Déplacement entre disques différents (copie + suppression)
+- ✅ Détection de multiples installations
+- ✅ Messages d'erreur en français
+- ✅ Script de build automatisé
+- ✅ Installeur professionnel avec Inno Setup
+- ✅ Logs détaillés pour débogage
 
 ## Chemins supportés
 
