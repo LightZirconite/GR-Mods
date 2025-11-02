@@ -5,6 +5,7 @@ using System.Threading;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
+using System.Text.Json;
 using Microsoft.Win32;
 
 namespace GTA5Launcher
@@ -872,6 +873,14 @@ namespace GTA5Launcher
                                       "Certains fichiers sont manquants ou ont une taille différente après le déplacement.");
                 }
                 
+                // ✨ NEW: Register game with target platform
+                LogMessage("Enregistrement du jeu avec la plateforme cible...");
+                RegisterGameWithPlatform(targetPlatform, targetPath);
+                
+                // ✨ NEW: Unregister from source platform
+                LogMessage("Désenregistrement du jeu de la plateforme source...");
+                UnregisterGameFromPlatform(currentInstallation.Type, currentInstallation.Path);
+                
                 LogMessage("Déplacement terminé avec succès");
                 return true;
             }
@@ -1140,6 +1149,287 @@ namespace GTA5Launcher
                     return "https://www.epicgames.com/store/download";
                 default:
                     return "";
+            }
+        }
+
+        /// <summary>
+        /// Registers GTA V with the target platform launcher so it can detect the game automatically
+        /// </summary>
+        private void RegisterGameWithPlatform(PlatformType platform, string gamePath)
+        {
+            try
+            {
+                LogMessage($"=== Registering game with {GetPlatformName(platform)} ===");
+                
+                switch (platform)
+                {
+                    case PlatformType.Steam:
+                        RegisterWithSteam(gamePath);
+                        break;
+                    case PlatformType.Epic:
+                        RegisterWithEpic(gamePath);
+                        break;
+                    case PlatformType.Rockstar:
+                        RegisterWithRockstar(gamePath);
+                        break;
+                }
+                
+                LogMessage($"✓ Game registered successfully with {GetPlatformName(platform)}");
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"Error registering with {GetPlatformName(platform)}: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Creates Steam's appmanifest_271590.acf file to make Steam recognize GTA V
+        /// </summary>
+        private void RegisterWithSteam(string gamePath)
+        {
+            try
+            {
+                // Get steamapps directory
+                var gameDir = new DirectoryInfo(gamePath);
+                var commonDir = gameDir.Parent; // "common"
+                var steamAppsDir = commonDir.Parent; // "steamapps"
+                
+                var manifestPath = Path.Combine(steamAppsDir.FullName, "appmanifest_271590.acf");
+                
+                // Get game size
+                long sizeOnDisk = GetDirectorySize(gamePath);
+                long timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                
+                // Create ACF manifest in VDF format
+                var manifest = $@"""AppState""
+{{
+	""appid""		""271590""
+	""Universe""		""1""
+	""name""		""Grand Theft Auto V""
+	""StateFlags""		""4""
+	""installdir""		""Grand Theft Auto V Enhanced""
+	""LastUpdated""		""{timestamp}""
+	""UpdateResult""		""0""
+	""SizeOnDisk""		""{sizeOnDisk}""
+	""buildid""		""0""
+	""LastOwner""		""0""
+	""BytesToDownload""		""0""
+	""BytesDownloaded""		""0""
+	""BytesToStage""		""0""
+	""BytesStaged""		""0""
+	""TargetBuildID""		""0""
+	""AutoUpdateBehavior""		""0""
+	""AllowOtherDownloadsWhileRunning""		""0""
+	""ScheduledAutoUpdate""		""0""
+}}
+";
+                
+                File.WriteAllText(manifestPath, manifest);
+                LogMessage($"Steam manifest created: {manifestPath}");
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"Error creating Steam manifest: {ex.Message}");
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Creates Epic's manifest .item file to make Epic Games Launcher recognize GTA V
+        /// </summary>
+        private void RegisterWithEpic(string gamePath)
+        {
+            try
+            {
+                var manifestsPath = @"C:\ProgramData\Epic\EpicGamesLauncher\Data\Manifests";
+                
+                if (!Directory.Exists(manifestsPath))
+                {
+                    Directory.CreateDirectory(manifestsPath);
+                    LogMessage($"Created Epic manifests directory: {manifestsPath}");
+                }
+                
+                // GTA V Epic catalog item ID
+                var gtaEpicId = "9d2d0eb64d5c44529cece33fe2a46482";
+                var manifestFile = Path.Combine(manifestsPath, $"{gtaEpicId}.item");
+                
+                // Create manifest JSON
+                var manifest = new
+                {
+                    FormatVersion = 0,
+                    bIsIncompleteInstall = false,
+                    AppName = gtaEpicId,
+                    InstallLocation = gamePath.Replace("\\", "\\\\"),
+                    InstallSize = (ulong)GetDirectorySize(gamePath),
+                    InstallTags = new string[] { },
+                    LaunchCommand = "",
+                    LaunchExecutable = "GTA5_Enhanced.exe",
+                    ManifestLocation = "",
+                    StagingLocation = ""
+                };
+                
+                var json = JsonSerializer.Serialize(manifest, new JsonSerializerOptions 
+                { 
+                    WriteIndented = true 
+                });
+                
+                File.WriteAllText(manifestFile, json);
+                LogMessage($"Epic manifest created: {manifestFile}");
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"Error creating Epic manifest: {ex.Message}");
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Updates Rockstar registry keys to point to the new location
+        /// </summary>
+        private void RegisterWithRockstar(string gamePath)
+        {
+            try
+            {
+                // Update registry with new install path
+                using (var key = Registry.LocalMachine.OpenSubKey(
+                    @"SOFTWARE\WOW6432Node\Rockstar Games\Grand Theft Auto V", 
+                    writable: true))
+                {
+                    if (key != null)
+                    {
+                        key.SetValue("InstallFolder", gamePath, RegistryValueKind.String);
+                        LogMessage($"Rockstar registry updated: InstallFolder = {gamePath}");
+                    }
+                    else
+                    {
+                        // Create the key if it doesn't exist
+                        using (var parentKey = Registry.LocalMachine.OpenSubKey(
+                            @"SOFTWARE\WOW6432Node\Rockstar Games", writable: true))
+                        {
+                            if (parentKey != null)
+                            {
+                                using (var newKey = parentKey.CreateSubKey("Grand Theft Auto V"))
+                                {
+                                    newKey.SetValue("InstallFolder", gamePath, RegistryValueKind.String);
+                                    LogMessage($"Rockstar registry key created with InstallFolder = {gamePath}");
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"Error updating Rockstar registry: {ex.Message}");
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Unregisters GTA V from the source platform launcher
+        /// </summary>
+        private void UnregisterGameFromPlatform(PlatformType platform, string oldPath)
+        {
+            try
+            {
+                LogMessage($"=== Unregistering game from {GetPlatformName(platform)} ===");
+                
+                switch (platform)
+                {
+                    case PlatformType.Steam:
+                        UnregisterFromSteam(oldPath);
+                        break;
+                    case PlatformType.Epic:
+                        UnregisterFromEpic();
+                        break;
+                    case PlatformType.Rockstar:
+                        UnregisterFromRockstar();
+                        break;
+                }
+                
+                LogMessage($"✓ Game unregistered from {GetPlatformName(platform)}");
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"Warning: Could not fully unregister from {GetPlatformName(platform)}: {ex.Message}");
+                // Don't throw - this is not critical
+            }
+        }
+
+        /// <summary>
+        /// Removes Steam's appmanifest file
+        /// </summary>
+        private void UnregisterFromSteam(string oldPath)
+        {
+            try
+            {
+                var gameDir = new DirectoryInfo(oldPath);
+                var commonDir = gameDir.Parent;
+                var steamAppsDir = commonDir.Parent;
+                
+                var manifestPath = Path.Combine(steamAppsDir.FullName, "appmanifest_271590.acf");
+                
+                if (File.Exists(manifestPath))
+                {
+                    File.Delete(manifestPath);
+                    LogMessage($"Deleted Steam manifest: {manifestPath}");
+                }
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"Error deleting Steam manifest: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Removes Epic's manifest .item file
+        /// </summary>
+        private void UnregisterFromEpic()
+        {
+            try
+            {
+                var manifestsPath = @"C:\ProgramData\Epic\EpicGamesLauncher\Data\Manifests";
+                
+                if (Directory.Exists(manifestsPath))
+                {
+                    // Find and delete GTA V manifest
+                    var gtaEpicId = "9d2d0eb64d5c44529cece33fe2a46482";
+                    var manifestFile = Path.Combine(manifestsPath, $"{gtaEpicId}.item");
+                    
+                    if (File.Exists(manifestFile))
+                    {
+                        File.Delete(manifestFile);
+                        LogMessage($"Deleted Epic manifest: {manifestFile}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"Error deleting Epic manifest: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Removes or clears Rockstar registry entry
+        /// </summary>
+        private void UnregisterFromRockstar()
+        {
+            try
+            {
+                using (var key = Registry.LocalMachine.OpenSubKey(
+                    @"SOFTWARE\WOW6432Node\Rockstar Games\Grand Theft Auto V", 
+                    writable: true))
+                {
+                    if (key != null)
+                    {
+                        key.DeleteValue("InstallFolder", throwOnMissingValue: false);
+                        LogMessage("Rockstar registry InstallFolder deleted");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"Error clearing Rockstar registry: {ex.Message}");
             }
         }
 
