@@ -5,6 +5,7 @@
     <TargetFramework>net6.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>..\assets\GR-Mods.ico</ApplicationIcon>
     <AssemblyName>GTA5Launcher</AssemblyName>
     <RootNamespace>GTA5Launcher</RootNamespace>
   </PropertyGroup>
@@ -13,6 +14,12 @@
     <None Update="assets\**">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\assets\GR-Mods.ico">
+      <Link>GR-Mods.ico</Link>
+    </Content>
   </ItemGroup>
 
 </Project>
