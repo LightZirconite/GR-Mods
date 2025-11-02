@@ -19,7 +19,7 @@ namespace GTA5Launcher
     public class UpdateChecker
     {
         private const string GITHUB_API_URL = "https://api.github.com/repos/LightZirconite/GR-Mods/releases/latest";
-        private const string CURRENT_VERSION = "1.1.0";
+        private const string CURRENT_VERSION = "0.0.1";
 
         public async Task<(bool hasUpdate, string latestVersion, string downloadUrl, string releaseNotes)> CheckForUpdatesAsync()
         {

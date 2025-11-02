@@ -94,7 +94,7 @@ namespace GTA5Launcher
                 {
                     var result = MessageBox.Show(
                         $"🎉 Une nouvelle version de GR Mods est disponible !\n\n" +
-                        $"Version actuelle : 1.1.0\n" +
+                        $"Version actuelle : 0.0.1\n" +
                         $"Nouvelle version : {latestVersion}\n\n" +
                         $"Voulez-vous télécharger la mise à jour ?",
                         "Mise à jour disponible",
