@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 using Microsoft.Win32;
 
 namespace GTA5Launcher
@@ -12,7 +13,8 @@ namespace GTA5Launcher
     {
         Steam,
         Rockstar,
-        Epic
+        Epic,
+        Unknown
     }
 
     public class ProgressInfo
@@ -54,45 +56,102 @@ namespace GTA5Launcher
         // Enhanced version uses GTA5_Enhanced.exe instead of GTA5.exe
         private const string GAME_EXE_ENHANCED = "GTA5_Enhanced.exe";
         private const string GAME_EXE_LEGACY = "GTA5.exe";
+        private const int STEAM_APPID = 271590; // GTA V App ID on Steam
 
-        private List<string> GetSteamLibraryPaths()
+        /// <summary>
+        /// Reads Steam's libraryfolders.vdf to find ALL Steam libraries configured by the user
+        /// This ensures we find GTA V no matter where Steam is installed
+        /// </summary>
+        private List<string> GetAllSteamLibraries()
         {
-            var paths = new List<string>
-            {
-                @"C:\Program Files (x86)\Steam\steamapps\common\Grand Theft Auto V Enhanced",
-                @"D:\SteamLibrary\steamapps\common\Grand Theft Auto V Enhanced",
-                @"E:\SteamLibrary\steamapps\common\Grand Theft Auto V Enhanced"
-            };
-
-            // Try to detect Steam installation path from registry
+            var libraries = new List<string>();
+            
             try
             {
+                // 1. Find Steam installation path from registry
+                string steamPath = null;
                 using (var key = Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam"))
                 {
                     if (key != null)
                     {
-                        var steamPath = key.GetValue("SteamPath") as string;
+                        steamPath = key.GetValue("SteamPath") as string;
                         if (!string.IsNullOrEmpty(steamPath))
                         {
-                            // Normalize path (convert forward slashes to backslashes)
                             steamPath = steamPath.Replace("/", "\\");
-                            var gtaPath = Path.Combine(steamPath, "steamapps", "common", "Grand Theft Auto V Enhanced");
-                            
-                            // Normalize and check if path not already in list (case-insensitive)
-                            gtaPath = Path.GetFullPath(gtaPath);
-                            if (!paths.Any(p => Path.GetFullPath(p).Equals(gtaPath, StringComparison.OrdinalIgnoreCase)))
-                                paths.Insert(0, gtaPath);
                         }
                     }
                 }
+                
+                if (string.IsNullOrEmpty(steamPath) || !Directory.Exists(steamPath))
+                {
+                    LogMessage("Steam installation not found in registry");
+                    return libraries;
+                }
+                
+                LogMessage($"Steam installation found: {steamPath}");
+                
+                // 2. Read libraryfolders.vdf file
+                var vdfPath = Path.Combine(steamPath, "config", "libraryfolders.vdf");
+                
+                if (!File.Exists(vdfPath))
+                {
+                    LogMessage($"libraryfolders.vdf not found at: {vdfPath}");
+                    
+                    // Fallback: add default Steam library
+                    var defaultLibrary = Path.Combine(steamPath, "steamapps", "common", "Grand Theft Auto V Enhanced");
+                    if (Directory.Exists(defaultLibrary))
+                    {
+                        libraries.Add(defaultLibrary);
+                    }
+                    
+                    return libraries;
+                }
+                
+                // 3. Parse VDF content to extract all library paths
+                var content = File.ReadAllText(vdfPath);
+                LogMessage("Parsing Steam library folders...");
+                
+                // Regex to match: "path"    "X:\\Path\\To\\Library"
+                var pathRegex = new Regex(@"""path""\s+""([^""]+)""", RegexOptions.IgnoreCase);
+                var matches = pathRegex.Matches(content);
+                
+                foreach (Match match in matches)
+                {
+                    if (match.Groups.Count > 1)
+                    {
+                        // Convert \\\\ to \\ (VDF escapes backslashes)
+                        var libraryPath = match.Groups[1].Value.Replace("\\\\", "\\");
+                        
+                        LogMessage($"Steam library path found: {libraryPath}");
+                        
+                        // Only check for "Grand Theft Auto V Enhanced" (ignore legacy version)
+                        var gtaPath = Path.Combine(libraryPath, "steamapps", "common", "Grand Theft Auto V Enhanced");
+                        
+                        if (Directory.Exists(gtaPath) && IsValidGTAInstallation(gtaPath))
+                        {
+                            libraries.Add(gtaPath);
+                            LogMessage($"✓ GTA V Enhanced found in Steam library: {gtaPath}");
+                        }
+                    }
+                }
+                
+                LogMessage($"Total Steam libraries with GTA V: {libraries.Count}");
             }
-            catch { }
-
-            // Remove duplicates and return distinct paths (normalize all paths)
-            return paths
+            catch (Exception ex)
+            {
+                LogMessage($"Error reading Steam libraries: {ex.Message}");
+            }
+            
+            return libraries
                 .Select(p => Path.GetFullPath(p))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
+        }
+
+        private List<string> GetSteamLibraryPaths()
+        {
+            // Use the new intelligent Steam detection
+            return GetAllSteamLibraries();
         }
 
         private readonly string[] rockstarPaths = new[]
@@ -111,17 +170,111 @@ namespace GTA5Launcher
             @"E:\Epic Games\GTA"
         };
 
+        /// <summary>
+        /// Identifies which platform a GTA V installation belongs to by examining:
+        /// 1. Path structure (steamapps, Rockstar Games, Epic Games folders)
+        /// 2. Platform-specific files (steam_appid.txt, etc.)
+        /// 3. Heuristics based on folder naming
+        /// </summary>
+        private PlatformType IdentifyPlatformFromPath(string gtaPath)
+        {
+            if (string.IsNullOrEmpty(gtaPath))
+                return PlatformType.Unknown;
+            
+            try
+            {
+                // Normalize path
+                gtaPath = Path.GetFullPath(gtaPath);
+                
+                // 1. Check for Steam-specific indicators
+                if (gtaPath.Contains("steamapps", StringComparison.OrdinalIgnoreCase) ||
+                    gtaPath.Contains("Steam", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Additional verification: check for steam_appid.txt
+                    var steamAppIdFile = Path.Combine(gtaPath, "steam_appid.txt");
+                    if (File.Exists(steamAppIdFile))
+                    {
+                        try
+                        {
+                            var appId = File.ReadAllText(steamAppIdFile).Trim();
+                            if (appId == STEAM_APPID.ToString())
+                            {
+                                LogMessage($"Platform identified: Steam (steam_appid.txt found with {appId})");
+                                return PlatformType.Steam;
+                            }
+                        }
+                        catch { }
+                    }
+                    
+                    LogMessage("Platform identified: Steam (path structure)");
+                    return PlatformType.Steam;
+                }
+                
+                // 2. Check for Epic Games indicators
+                if (gtaPath.Contains("Epic", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Check for .egstore folder (Epic Games Store marker)
+                    var egstoreFolder = Path.Combine(gtaPath, ".egstore");
+                    if (Directory.Exists(egstoreFolder))
+                    {
+                        LogMessage("Platform identified: Epic Games (.egstore folder found)");
+                        return PlatformType.Epic;
+                    }
+                    
+                    LogMessage("Platform identified: Epic Games (path structure)");
+                    return PlatformType.Epic;
+                }
+                
+                // 3. Check for Rockstar Games indicators
+                if (gtaPath.Contains("Rockstar", StringComparison.OrdinalIgnoreCase))
+                {
+                    LogMessage("Platform identified: Rockstar Games (path structure)");
+                    return PlatformType.Rockstar;
+                }
+                
+                // 4. Check parent directories for platform indicators
+                var parentPath = Directory.GetParent(gtaPath)?.FullName;
+                if (!string.IsNullOrEmpty(parentPath))
+                {
+                    if (parentPath.Contains("Steam", StringComparison.OrdinalIgnoreCase))
+                        return PlatformType.Steam;
+                    if (parentPath.Contains("Epic", StringComparison.OrdinalIgnoreCase))
+                        return PlatformType.Epic;
+                    if (parentPath.Contains("Rockstar", StringComparison.OrdinalIgnoreCase))
+                        return PlatformType.Rockstar;
+                }
+                
+                // 5. Last resort: check for platform-specific files
+                // Steam has steamclient.dll or similar
+                if (File.Exists(Path.Combine(gtaPath, "steam_api64.dll")))
+                {
+                    LogMessage("Platform identified: Steam (steam_api64.dll found)");
+                    return PlatformType.Steam;
+                }
+                
+                LogMessage($"Platform could not be determined for: {gtaPath}");
+                return PlatformType.Unknown;
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"Error identifying platform for {gtaPath}: {ex.Message}");
+                return PlatformType.Unknown;
+            }
+        }
+
         public List<PlatformInfo> DetectAllInstallations()
         {
             var installations = new List<PlatformInfo>();
             var foundPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            // Check Steam (using dynamic detection)
+            LogMessage("=== Starting GTA V detection ===");
+
+            // Check Steam (using dynamic VDF detection)
+            LogMessage("Scanning Steam libraries...");
             foreach (var path in GetSteamLibraryPaths())
             {
                 if (IsValidGTAInstallation(path))
                 {
-                    // Normalize path to avoid duplicates
                     var normalizedPath = Path.GetFullPath(path);
                     
                     if (!foundPaths.Contains(normalizedPath))
@@ -138,16 +291,17 @@ namespace GTA5Launcher
                             DetectedMods = detectedMods
                         });
                         foundPaths.Add(normalizedPath);
+                        LogMessage($"✓ Steam installation added: {normalizedPath}");
                     }
                 }
             }
 
             // Check Rockstar
+            LogMessage("Scanning Rockstar Games paths...");
             foreach (var path in rockstarPaths)
             {
                 if (IsValidGTAInstallation(path))
                 {
-                    // Normalize path to avoid duplicates
                     var normalizedPath = Path.GetFullPath(path);
                     
                     if (!foundPaths.Contains(normalizedPath))
@@ -164,16 +318,17 @@ namespace GTA5Launcher
                             DetectedMods = detectedMods
                         });
                         foundPaths.Add(normalizedPath);
+                        LogMessage($"✓ Rockstar installation added: {normalizedPath}");
                     }
                 }
             }
 
             // Check Epic Games
+            LogMessage("Scanning Epic Games paths...");
             foreach (var path in epicPaths)
             {
                 if (IsValidGTAInstallation(path))
                 {
-                    // Normalize path to avoid duplicates
                     var normalizedPath = Path.GetFullPath(path);
                     
                     if (!foundPaths.Contains(normalizedPath))
@@ -190,17 +345,19 @@ namespace GTA5Launcher
                             DetectedMods = detectedMods
                         });
                         foundPaths.Add(normalizedPath);
+                        LogMessage($"✓ Epic Games installation added: {normalizedPath}");
                     }
                 }
             }
 
-            // Fallback: Search in all drives if nothing found
+            // Fallback: Deep search if nothing found
             if (installations.Count == 0)
             {
                 LogMessage("No installations found in standard paths, performing deep search...");
                 installations = PerformDeepSearch();
             }
 
+            LogMessage($"=== Detection complete: {installations.Count} installation(s) found ===");
             return installations;
         }
 
@@ -215,27 +372,29 @@ namespace GTA5Launcher
             if (!Directory.Exists(path))
                 return false;
 
-            // Check for Enhanced version first (priority)
+            // ONLY accept Enhanced version - reject legacy version
             var exePathEnhanced = Path.Combine(path, GAME_EXE_ENHANCED);
-            var exePathLegacy = Path.Combine(path, GAME_EXE_LEGACY);
             
-            bool hasEnhanced = File.Exists(exePathEnhanced);
-            bool hasLegacy = File.Exists(exePathLegacy);
-            
-            // Must have at least one main exe
-            if (!hasEnhanced && !hasLegacy)
+            // Must have GTA5_Enhanced.exe
+            if (!File.Exists(exePathEnhanced))
+            {
+                LogMessage($"Rejected installation (no Enhanced exe): {path}");
                 return false;
+            }
 
             // Additional validation: check for PlayGTAV.exe (present in all versions)
             var playGTAPath = Path.Combine(path, "PlayGTAV.exe");
             if (!File.Exists(playGTAPath))
-                return false;
-
-            // We target Enhanced version primarily
-            // If folder name contains "Enhanced", it must have GTA5_Enhanced.exe
-            if (path.Contains("Enhanced", StringComparison.OrdinalIgnoreCase))
             {
-                return hasEnhanced;
+                LogMessage($"Rejected installation (no PlayGTAV.exe): {path}");
+                return false;
+            }
+
+            // Folder name should contain "Enhanced"
+            if (!path.Contains("Enhanced", StringComparison.OrdinalIgnoreCase))
+            {
+                LogMessage($"Rejected installation (not Enhanced version): {path}");
+                return false;
             }
 
             return true;
@@ -460,6 +619,114 @@ namespace GTA5Launcher
             return false;
         }
 
+        /// <summary>
+        /// Checks if a platform launcher is installed on the system
+        /// </summary>
+        private bool IsPlatformInstalled(PlatformType platform)
+        {
+            try
+            {
+                switch (platform)
+                {
+                    case PlatformType.Steam:
+                        // Check Steam registry key
+                        using (var key = Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam"))
+                        {
+                            if (key != null)
+                            {
+                                var steamPath = key.GetValue("SteamPath") as string;
+                                if (!string.IsNullOrEmpty(steamPath))
+                                {
+                                    steamPath = steamPath.Replace("/", "\\");
+                                    var steamExe = Path.Combine(steamPath, "steam.exe");
+                                    bool isInstalled = File.Exists(steamExe);
+                                    LogMessage($"Steam installation check: {(isInstalled ? "Found" : "Not found")} at {steamPath}");
+                                    return isInstalled;
+                                }
+                            }
+                        }
+                        LogMessage("Steam not found in registry");
+                        return false;
+
+                    case PlatformType.Epic:
+                        // Check Epic Games Launcher registry
+                        using (var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\WOW6432Node\Epic Games\EpicGamesLauncher"))
+                        {
+                            if (key != null)
+                            {
+                                var epicPath = key.GetValue("AppDataPath") as string;
+                                if (!string.IsNullOrEmpty(epicPath))
+                                {
+                                    LogMessage($"Epic Games Launcher found in registry: {epicPath}");
+                                    return true;
+                                }
+                            }
+                        }
+                        
+                        // Alternative check: Look for Epic in Program Files
+                        var epicPaths = new[]
+                        {
+                            @"C:\Program Files (x86)\Epic Games\Launcher",
+                            @"C:\Program Files\Epic Games\Launcher"
+                        };
+                        
+                        foreach (var path in epicPaths)
+                        {
+                            if (Directory.Exists(path))
+                            {
+                                LogMessage($"Epic Games Launcher found at: {path}");
+                                return true;
+                            }
+                        }
+                        
+                        LogMessage("Epic Games Launcher not found");
+                        return false;
+
+                    case PlatformType.Rockstar:
+                        // Check Rockstar Games Launcher registry
+                        using (var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\WOW6432Node\Rockstar Games\Launcher"))
+                        {
+                            if (key != null)
+                            {
+                                var rockstarPath = key.GetValue("InstallFolder") as string;
+                                if (!string.IsNullOrEmpty(rockstarPath) && Directory.Exists(rockstarPath))
+                                {
+                                    LogMessage($"Rockstar Games Launcher found at: {rockstarPath}");
+                                    return true;
+                                }
+                            }
+                        }
+                        
+                        // Alternative check: Look for Rockstar in Program Files
+                        var rockstarPaths = new[]
+                        {
+                            @"C:\Program Files\Rockstar Games\Launcher",
+                            @"C:\Program Files (x86)\Rockstar Games\Launcher"
+                        };
+                        
+                        foreach (var path in rockstarPaths)
+                        {
+                            if (Directory.Exists(path))
+                            {
+                                LogMessage($"Rockstar Games Launcher found at: {path}");
+                                return true;
+                            }
+                        }
+                        
+                        LogMessage("Rockstar Games Launcher not found");
+                        return false;
+
+                    default:
+                        return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"Error checking platform installation: {ex.Message}");
+                return false;
+            }
+        }
+
         private bool HasSufficientDiskSpace(string targetPath, long requiredBytes)
         {
             try
@@ -514,6 +781,16 @@ namespace GTA5Launcher
             if (currentInstallation.Type == targetPlatform)
             {
                 throw new Exception("Le jeu est déjà sur cette plateforme.");
+            }
+
+            // Check if target platform is installed
+            if (!IsPlatformInstalled(targetPlatform))
+            {
+                string platformName = GetPlatformName(targetPlatform);
+                throw new Exception($"❌ {platformName} n'est pas installé sur votre système.\n\n" +
+                                  $"Vous devez d'abord installer {platformName} avant de pouvoir y déplacer GTA V.\n\n" +
+                                  $"Téléchargez-le depuis :\n" +
+                                  GetPlatformDownloadLink(targetPlatform));
             }
 
             // Check if game is running
@@ -681,7 +958,32 @@ namespace GTA5Launcher
             switch (platform)
             {
                 case PlatformType.Steam:
-                    return GetSteamLibraryPaths()[0];
+                    // Get Steam installation path from registry
+                    try
+                    {
+                        using (var key = Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam"))
+                        {
+                            if (key != null)
+                            {
+                                var steamPath = key.GetValue("SteamPath") as string;
+                                if (!string.IsNullOrEmpty(steamPath))
+                                {
+                                    steamPath = steamPath.Replace("/", "\\");
+                                    var targetPath = Path.Combine(steamPath, "steamapps", "common", "Grand Theft Auto V Enhanced");
+                                    LogMessage($"Target Steam path: {targetPath}");
+                                    return targetPath;
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        LogMessage($"Error reading Steam registry: {ex.Message}");
+                    }
+                    
+                    // Fallback to default path
+                    return @"C:\Program Files (x86)\Steam\steamapps\common\Grand Theft Auto V Enhanced";
+                    
                 case PlatformType.Rockstar:
                     return rockstarPaths[0];
                 case PlatformType.Epic:
@@ -750,16 +1052,16 @@ namespace GTA5Launcher
 
                         try
                         {
-                            // Look for GTA V folders
-                            var gtaFolders = Directory.GetDirectories(searchPath, "*Grand Theft Auto*", SearchOption.TopDirectoryOnly)
-                                .Concat(Directory.GetDirectories(searchPath, "GTA*", SearchOption.TopDirectoryOnly))
+                            // Only look for "Grand Theft Auto V Enhanced" folders (ignore legacy version)
+                            var gtaFolders = Directory.GetDirectories(searchPath, "*Grand Theft Auto V Enhanced*", SearchOption.TopDirectoryOnly)
                                 .ToList();
 
                             foreach (var folder in gtaFolders)
                             {
                                 if (IsValidGTAInstallation(folder))
                                 {
-                                    var platformType = DeterminePlatformFromPath(folder);
+                                    // Use intelligent platform identification
+                                    var platformType = IdentifyPlatformFromPath(folder);
                                     var platformName = GetPlatformName(platformType);
 
                                     // Check if not already in list
@@ -777,7 +1079,7 @@ namespace GTA5Launcher
                                             DetectedMods = detectedMods
                                         });
                                         
-                                        LogMessage($"Found installation: {folder} ({platformName})");
+                                        LogMessage($"✓ Found installation: {folder} ({platformName})");
                                     }
                                 }
                             }
@@ -805,15 +1107,8 @@ namespace GTA5Launcher
 
         private PlatformType DeterminePlatformFromPath(string path)
         {
-            if (path.Contains("Steam", StringComparison.OrdinalIgnoreCase))
-                return PlatformType.Steam;
-            if (path.Contains("Epic", StringComparison.OrdinalIgnoreCase))
-                return PlatformType.Epic;
-            if (path.Contains("Rockstar", StringComparison.OrdinalIgnoreCase))
-                return PlatformType.Rockstar;
-            
-            // Default to Rockstar if unknown
-            return PlatformType.Rockstar;
+            // Use the new intelligent identification method
+            return IdentifyPlatformFromPath(path);
         }
 
         private string GetPlatformName(PlatformType type)
@@ -826,8 +1121,25 @@ namespace GTA5Launcher
                     return "Rockstar Games";
                 case PlatformType.Epic:
                     return "Epic Games";
+                case PlatformType.Unknown:
+                    return "Unknown Platform";
                 default:
                     return "Unknown";
+            }
+        }
+
+        private string GetPlatformDownloadLink(PlatformType type)
+        {
+            switch (type)
+            {
+                case PlatformType.Steam:
+                    return "https://store.steampowered.com/about/";
+                case PlatformType.Rockstar:
+                    return "https://www.rockstargames.com/rockstar-games-launcher";
+                case PlatformType.Epic:
+                    return "https://www.epicgames.com/store/download";
+                default:
+                    return "";
             }
         }
 
