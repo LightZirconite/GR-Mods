@@ -16,6 +16,27 @@ namespace GTA5Launcher
             InitializeComponent();
             gameManager = new GameManager();
             Loaded += MainWindow_Loaded;
+            
+            // Vérifier que les images sont bien chargées
+            CheckImages();
+        }
+
+        private void CheckImages()
+        {
+            try
+            {
+                // Log pour debug
+                var assetsPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "assets");
+                if (!System.IO.Directory.Exists(assetsPath))
+                {
+                    MessageBox.Show(
+                        $"ATTENTION: Le dossier assets est manquant!\nChemin attendu: {assetsPath}\n\nLes images ne s'afficheront pas correctement.",
+                        "Images manquantes",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                }
+            }
+            catch { }
         }
 
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
